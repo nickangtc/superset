@@ -225,7 +225,10 @@ Follow this source-controlled playbook:
 {playbook}
 
 Additional instructions:
-- Make the smallest safe dependency/security fix for the advisory.
+- This issue may contain multiple advisories for one package. Remediate the
+  full set of advisories in a single PR.
+- Make the smallest safe dependency/security fix that resolves all listed
+  advisories.
 - Avoid `npm audit fix --force` unless you justify why it is necessary.
 - Inspect `superset-frontend/package-lock.json` and any package changes after
   automated fixes.

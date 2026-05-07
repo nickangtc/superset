@@ -21,16 +21,17 @@ Use this playbook when a Devin session is launched from an `npm-audit` issue wit
 
 ## Guardrails
 
-1. Prefer the smallest safe dependency/security change that resolves the reported high or critical advisory.
-2. Start in `superset-frontend`, because the audit scan runs against that package-lock context.
-3. Inspect the advisory metadata in the GitHub issue and confirm the vulnerable package, advisory ID or URL, severity, vulnerable range, and recommended fix.
-4. Prefer targeted package updates or safe `npm audit fix` changes. Avoid `npm audit fix --force` unless the advisory cannot be remediated safely another way and the PR explains why a force upgrade is justified.
-5. After any automated audit fix, inspect the diff before committing. Check `superset-frontend/package.json`, `superset-frontend/package-lock.json`, and workspace package changes for unrelated upgrades.
-6. Run dependency installation or lockfile refresh commands needed for a consistent lockfile.
-7. Run relevant validation before opening the PR:
+1. Each npm-audit GitHub issue covers **one package** and may list **multiple advisories**. The goal is to remediate the full set of advisories for that package in a single PR.
+2. Prefer the smallest safe dependency/security change that resolves all reported high or critical advisories for the package.
+3. Start in `superset-frontend`, because the audit scan runs against that package-lock context.
+4. Inspect the advisory metadata in the GitHub issue: the summary table shows the package, highest severity, advisory count, vulnerable ranges, and recommended fix. The **Advisories** table lists each advisory with its severity, advisory link, vulnerable range, and title.
+5. Prefer targeted package updates or safe `npm audit fix` changes. Avoid `npm audit fix --force` unless the advisories cannot be remediated safely another way and the PR explains why a force upgrade is justified.
+6. After any automated audit fix, inspect the diff before committing. Check `superset-frontend/package.json`, `superset-frontend/package-lock.json`, and workspace package changes for unrelated upgrades.
+7. Run dependency installation or lockfile refresh commands needed for a consistent lockfile.
+8. Run relevant validation before opening the PR:
    - install or lockfile verification command used for the change
    - frontend lint or typecheck when touched packages can affect compiled code
    - targeted tests for impacted packages when practical
    - leave broad/full test-suite execution to CI when local runtime cost is excessive
-8. Open a pull request with the remediation summary, advisory details, and validation performed.
-9. If the dependency fix is risky, blocked, or requires a semver-major upgrade, explain the tradeoff in the PR and keep the diff minimal.
+9. Open a single pull request covering all advisories for the package. Include the remediation summary, advisory details, and validation performed.
+10. If the dependency fix is risky, blocked, or requires a semver-major upgrade, explain the tradeoff in the PR and keep the diff minimal.
