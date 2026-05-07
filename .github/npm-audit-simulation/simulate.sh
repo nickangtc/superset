@@ -21,11 +21,11 @@
 #   bash .github/npm-audit-simulation/simulate.sh [command]
 #
 # Commands:
-#   audit       Run npm audit --json against superset-frontend (default)
+#   audit       Run npm audit --json against superset-frontend
 #   issues      Run the issue-creation script in dry-run mode
 #   dispatch    Run the Devin dispatch script in dry-run mode
 #   validate    Run Python syntax checks on all automation scripts
-#   all         Run audit + issues + dispatch + validate
+#   all         Run audit + issues + dispatch + validate (default)
 
 set -euo pipefail
 
