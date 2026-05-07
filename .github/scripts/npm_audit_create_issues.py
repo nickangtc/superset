@@ -35,22 +35,48 @@ REQUIRED_LABELS: dict[str, tuple[str, str]] = {
     "devin-remediate": ("0e8a16", "Route this issue to Devin for remediation."),
 }
 SEVERITIES = {"high", "critical"}
+SEVERITY_RANK = {"critical": 0, "high": 1}
 FINGERPRINT_PREFIX = "<!-- devin-fingerprint: "
 
 
 @dataclass(frozen=True)
-class Finding:
-    package_name: str
+class Advisory:
     advisory_id: str
     title: str
     severity: str
     vulnerable_range: str
     url: str
+
+
+@dataclass(frozen=True)
+class PackageFinding:
+    package_name: str
+    advisories: tuple[Advisory, ...]
     fix_available: str
 
     @property
     def fingerprint(self) -> str:
-        return f"npm-audit|package={self.package_name}|advisory={self.advisory_id}"
+        return f"npm-audit|package={self.package_name}"
+
+    @property
+    def highest_severity(self) -> str:
+        best = "high"
+        for adv in self.advisories:
+            if SEVERITY_RANK.get(adv.severity, 99) < SEVERITY_RANK.get(best, 99):
+                best = adv.severity
+        return best
+
+    @property
+    def advisory_count(self) -> int:
+        return len(self.advisories)
+
+    @property
+    def all_vulnerable_ranges(self) -> list[str]:
+        seen: dict[str, None] = {}
+        for adv in self.advisories:
+            if adv.vulnerable_range not in seen:
+                seen[adv.vulnerable_range] = None
+        return list(seen)
 
 
 class GitHubClient:
@@ -141,9 +167,10 @@ def render_fix_available(value: object) -> str:
     return json.dumps(fix, sort_keys=True)
 
 
-def extract_findings(report: object) -> list[Finding]:
+def extract_package_findings(report: object) -> list[PackageFinding]:
     vulnerabilities = as_mapping(as_mapping(report).get("vulnerabilities"))
-    by_fingerprint: dict[str, Finding] = {}
+    packages: dict[str, list[Advisory]] = {}
+    package_fix: dict[str, str] = {}
 
     for package_name, raw_vulnerability in vulnerabilities.items():
         vulnerability = as_mapping(raw_vulnerability)
@@ -165,8 +192,7 @@ def extract_findings(report: object) -> list[Finding]:
             )
             if not advisory_id:
                 continue
-            finding = Finding(
-                package_name=package_name,
+            adv = Advisory(
                 advisory_id=advisory_id,
                 title=text(advisory.get("title")) or package_name,
                 severity=severity,
@@ -174,17 +200,32 @@ def extract_findings(report: object) -> list[Finding]:
                     text(advisory.get("range")) or package_range or "Not reported"
                 ),
                 url=text(advisory.get("url")),
-                fix_available=fix_available,
             )
-            by_fingerprint[finding.fingerprint] = finding
+            if package_name not in packages:
+                packages[package_name] = []
+            existing_ids = {a.advisory_id for a in packages[package_name]}
+            if advisory_id not in existing_ids:
+                packages[package_name].append(adv)
+            package_fix[package_name] = fix_available
 
-    return sorted(
-        by_fingerprint.values(),
-        key=lambda finding: (finding.package_name, finding.advisory_id),
-    )
+    findings: list[PackageFinding] = []
+    for pkg_name in sorted(packages):
+        advisories = sorted(
+            packages[pkg_name],
+            key=lambda a: (SEVERITY_RANK.get(a.severity, 99), a.advisory_id),
+        )
+        findings.append(
+            PackageFinding(
+                package_name=pkg_name,
+                advisories=tuple(advisories),
+                fix_available=package_fix.get(pkg_name, "Not reported"),
+            )
+        )
+
+    return findings
 
 
-def fingerprint_marker(finding: Finding) -> str:
+def fingerprint_marker(finding: PackageFinding) -> str:
     return f"{FINGERPRINT_PREFIX}{finding.fingerprint} -->"
 
 
@@ -192,35 +233,61 @@ def truncate_title(title: str, limit: int = 220) -> str:
     return title if len(title) <= limit else f"{title[: limit - 1]}…"
 
 
-def issue_title(finding: Finding) -> str:
+def issue_title(finding: PackageFinding) -> str:
+    count = finding.advisory_count
+    severity = finding.highest_severity
+    plural = "advisories" if count != 1 else "advisory"
     return truncate_title(
-        f"[npm audit] {finding.severity}: {finding.package_name} - {finding.title}"
+        f"[npm audit] {severity}: {finding.package_name}"
+        f" - {count} high/critical {plural}"
     )
 
 
-def issue_body(finding: Finding) -> str:
-    advisory = finding.url or finding.advisory_id
-    return (
-        f"{fingerprint_marker(finding)}\n"
-        "# npm audit finding\n\n"
-        "| Field | Value |\n"
-        "| --- | --- |\n"
-        f"| Package | `{finding.package_name}` |\n"
-        f"| Advisory | {advisory} |\n"
-        f"| Severity | `{finding.severity}` |\n"
-        f"| Vulnerable range | `{finding.vulnerable_range}` |\n"
-        f"| Recommended fix | {finding.fix_available} |\n\n"
-        "## Remediation\n\n"
-        "This issue was generated from `npm audit --json` in the "
-        "`superset-frontend` package-lock context. The remediation should "
-        "make the smallest safe dependency/security change that resolves "
-        "the advisory.\n\n"
-        "The scanner deduplicates by the hidden fingerprint comment above. "
-        "If an issue with the same fingerprint is open, the scanner updates "
-        "it. If only a closed issue has the same fingerprint, the scanner "
-        "skips creating a new issue so human closure decisions are respected; "
-        "reopen the closed issue manually if renewed remediation is desired.\n"
+def issue_body(finding: PackageFinding) -> str:
+    ranges_display = ", ".join(f"`{r}`" for r in finding.all_vulnerable_ranges)
+    lines = [
+        fingerprint_marker(finding),
+        "# npm audit finding",
+        "",
+        "| Field | Value |",
+        "| --- | --- |",
+        f"| Package | `{finding.package_name}` |",
+        f"| Highest severity | `{finding.highest_severity}` |",
+        f"| Advisory count | {finding.advisory_count} |",
+        f"| Vulnerable ranges | {ranges_display} |",
+        f"| Recommended fix | {finding.fix_available} |",
+        "",
+        "## Advisories",
+        "",
+        "| Severity | Advisory | Vulnerable range | Title |",
+        "| --- | --- | --- | --- |",
+    ]
+    for adv in finding.advisories:
+        advisory_link = adv.url if adv.url else adv.advisory_id
+        lines.append(
+            f"| `{adv.severity}` | {advisory_link}"
+            f" | `{adv.vulnerable_range}` | {adv.title} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Remediation",
+            "",
+            "This issue was generated from `npm audit --json` in the "
+            "`superset-frontend` package-lock context. The issue covers all "
+            "high/critical advisories for this package. The remediation should "
+            "make the smallest safe dependency/security change that resolves "
+            "the full set of advisories in one PR.",
+            "",
+            "The scanner deduplicates by the hidden fingerprint comment above. "
+            "If an open issue with the same fingerprint exists, the scanner "
+            "updates it. If only a closed issue has the same fingerprint, the "
+            "scanner skips creating a new issue so human closure decisions are "
+            "respected; reopen the closed issue manually if renewed remediation "
+            "is desired.",
+        ]
     )
+    return "\n".join(lines) + "\n"
 
 
 def label_names(issue: JsonObject) -> set[str]:
@@ -259,7 +326,9 @@ def load_existing_issues(client: GitHubClient) -> dict[str, list[JsonObject]]:
     return by_fingerprint
 
 
-def update_issue(client: GitHubClient, issue: JsonObject, finding: Finding) -> None:
+def update_issue(
+    client: GitHubClient, issue: JsonObject, finding: PackageFinding
+) -> None:
     issue_number = text(issue.get("number"))
     if not issue_number:
         raise RuntimeError("Matched issue is missing a number")
@@ -272,7 +341,7 @@ def update_issue(client: GitHubClient, issue: JsonObject, finding: Finding) -> N
     print(f"Updated issue #{issue_number} for {finding.fingerprint}")
 
 
-def create_issue(client: GitHubClient, finding: Finding) -> None:
+def create_issue(client: GitHubClient, finding: PackageFinding) -> None:
     response = client.request(
         "POST",
         "/issues",
@@ -287,12 +356,20 @@ def create_issue(client: GitHubClient, finding: Finding) -> None:
 
 
 def process_findings(
-    findings: list[Finding], client: GitHubClient, dry_run: bool
+    findings: list[PackageFinding], client: GitHubClient, dry_run: bool
 ) -> None:
-    print(f"Found {len(findings)} high/critical npm audit advisory-package findings")
+    total_advisories = sum(f.advisory_count for f in findings)
+    print(
+        f"Found {total_advisories} high/critical advisories"
+        f" across {len(findings)} packages"
+    )
     if dry_run:
         for finding in findings:
-            print(f"DRY RUN {finding.fingerprint}")
+            print(
+                f"DRY RUN {finding.fingerprint}"
+                f" ({finding.advisory_count} advisories,"
+                f" highest={finding.highest_severity})"
+            )
         return
 
     ensure_labels(client)
@@ -324,7 +401,7 @@ def main() -> None:
     with open(sys.argv[1], encoding="utf-8") as audit_file:
         report = json.load(audit_file)
 
-    findings = extract_findings(report)
+    findings = extract_package_findings(report)
     dry_run = os.environ.get("DRY_RUN", "").lower() == "true"
     token = os.environ.get("GITHUB_TOKEN", "")
     repo = os.environ.get("GITHUB_REPOSITORY", "")

@@ -20,7 +20,7 @@ limitations under the License.
 This repository contains a GitHub Actions automation loop for high and critical npm audit findings in `superset-frontend`:
 
 1. `.github/workflows/npm-audit-scan.yml` runs `npm audit --json --audit-level=high` in the `superset-frontend` package-lock context.
-2. `.github/scripts/npm_audit_create_issues.py` parses the audit report and creates or updates one GitHub issue per advisory/package finding.
+2. `.github/scripts/npm_audit_create_issues.py` parses the audit report and creates or updates one GitHub issue per vulnerable **package**, grouping all high/critical advisories for that package into a single issue.
 3. Issues receive the labels `npm-audit`, `security`, and `devin-remediate`.
 4. `.github/workflows/npm-audit-devin-dispatch.yml` listens for `issues: labeled` events where the added label is `devin-remediate`, verifies the issue is a scanner-created open npm audit issue, and starts a Devin API v3 session.
 5. Devin follows `.github/devin-playbooks/npm-audit-remediation.md`, remediates the dependency vulnerability, and opens a PR.
@@ -32,7 +32,14 @@ This repository contains a GitHub Actions automation loop for high and critical 
 
 Optional:
 
-- `ISSUE_BOT_TOKEN`: fine-grained PAT or GitHub App token with permission to create and edit issues. This is recommended for the fully automated `scheduled scan -> issue -> labeled event -> Devin` loop because GitHub suppresses most workflows triggered by actions performed with the default `GITHUB_TOKEN`. Without this token, scanner-created issues still appear, but the Devin dispatch workflow may need to be run manually for that issue.
+- `ISSUE_BOT_TOKEN`: a fine-grained Personal Access Token (PAT) with:
+  - **Repository access**: this fork only
+  - **Permissions**: Issues (read/write), Metadata (read)
+
+  This is recommended for the fully automated `scheduled scan -> issue -> labeled event -> Devin` loop because events created by the default `GITHUB_TOKEN` do not trigger downstream workflows (such as the `issues.labeled` dispatch workflow). Without this token, scanner-created issues still appear, but the Devin dispatch workflow will need to be run manually. The scan workflow picks it up via:
+  ```yaml
+  GITHUB_TOKEN: ${{ secrets.ISSUE_BOT_TOKEN || secrets.GITHUB_TOKEN }}
+  ```
 
 ## Label taxonomy
 
@@ -48,16 +55,16 @@ GitHub Actions cron expressions run in UTC. The scan workflow schedules both `03
 
 ## Deduplication strategy
 
-Each finding uses a stable fingerprint:
+Each package uses a stable fingerprint:
 
 ```text
-npm-audit|package=<package-name>|advisory=<advisory-id-or-url>
+npm-audit|package=<package-name>
 ```
 
 The issue body includes the exact fingerprint as an HTML comment:
 
 ```html
-<!-- devin-fingerprint: npm-audit|package=<package>|advisory=<advisory-id> -->
+<!-- devin-fingerprint: npm-audit|package=<package-name> -->
 ```
 
 The scanner does not rely on GitHub full-text issue search. It uses the GitHub Issues REST API to list issues with label `npm-audit` and `state=all`, then inspects raw issue bodies locally for the exact fingerprint comment.
@@ -66,7 +73,8 @@ Behavior:
 
 - If an open issue with the same fingerprint exists, the scanner updates that issue title, body, and labels.
 - If only closed issues with the same fingerprint exist, the scanner skips creating a duplicate. This preserves human closure decisions; reopen the closed issue manually if renewed remediation is desired.
-- If no issue with the fingerprint exists, the scanner creates a new issue with visible package, advisory, severity, vulnerable range, and fix metadata.
+- If no issue with the fingerprint exists, the scanner creates a new issue listing all high/critical advisories for the package, including severity, vulnerable ranges, advisory links, and fix metadata.
+- Deleted issues do not appear in the Issues API, so they will be recreated on the next scan.
 
 ## Devin dispatch safeguards
 
