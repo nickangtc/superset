@@ -127,12 +127,15 @@ docker run --rm npm-audit-sim -c \
    npm audit --json --audit-level=high > /tmp/npm-audit.json 2>/dev/null || true && \
    DRY_RUN=true python3 /workspace/scripts/npm_audit_create_issues.py /tmp/npm-audit.json"
 
-# Run Devin dispatch in dry-run mode
+# Run Devin dispatch in dry-run mode (uses real audit data from superset-frontend)
 docker run --rm \
   -e DRY_RUN=true \
   -e PLAYBOOK_PATH=/workspace/playbooks/npm-audit-remediation.md \
+  -e NPM_AUDIT_JSON=/tmp/npm-audit.json \
   npm-audit-sim -c \
-  "python3 /workspace/scripts/npm_audit_dispatch_devin.py"
+  "cd /workspace/superset-frontend && \
+   npm audit --json --audit-level=high > /tmp/npm-audit.json 2>/dev/null || true && \
+   python3 /workspace/scripts/npm_audit_dispatch_devin.py"
 
 # Validate Python syntax
 docker run --rm npm-audit-sim -c \
@@ -161,7 +164,7 @@ docker compose run --rm npm-audit-sim
 |---------|--------|
 | `audit` | Raw JSON output from `npm audit` showing vulnerabilities in `superset-frontend` |
 | `issues` | List of packages with high/critical advisories that would become GitHub issues |
-| `dispatch` | The full Devin prompt (with playbook) that would be sent to the Devin API |
+| `dispatch` | The full Devin prompt (with playbook) built from real audit findings that would be sent to the Devin API |
 | `validate` | Confirmation that all Python scripts have valid syntax |
 
 ### Simulated vs real
