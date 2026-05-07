@@ -72,9 +72,8 @@ The scanner does not rely on GitHub full-text issue search. It uses the GitHub I
 Behavior:
 
 - If an open issue with the same fingerprint exists, the scanner updates that issue title, body, and labels.
-- If only closed issues with the same fingerprint exist, the scanner skips creating a duplicate. This preserves human closure decisions; reopen the closed issue manually if renewed remediation is desired.
-- If no issue with the fingerprint exists, the scanner creates a new issue listing all high/critical advisories for the package, including severity, vulnerable ranges, advisory links, and fix metadata.
-- Deleted issues do not appear in the Issues API, so they will be recreated on the next scan.
+- If only closed issues with the same fingerprint exist, the scanner creates a new issue. Closed generated issues are treated as historical records. If the same package appears in a future scan and no open issue exists, the scanner creates a new issue rather than reopening the old one.
+- If no issue with the fingerprint exists (including deleted issues, which do not appear in the API), the scanner creates a new issue listing all high/critical advisories for the package, including severity, vulnerable ranges, advisory links, and fix metadata.
 
 ## Devin dispatch safeguards
 

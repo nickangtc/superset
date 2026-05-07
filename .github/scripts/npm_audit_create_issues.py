@@ -281,10 +281,9 @@ def issue_body(finding: PackageFinding) -> str:
             "",
             "The scanner deduplicates by the hidden fingerprint comment above. "
             "If an open issue with the same fingerprint exists, the scanner "
-            "updates it. If only a closed issue has the same fingerprint, the "
-            "scanner skips creating a new issue so human closure decisions are "
-            "respected; reopen the closed issue manually if renewed remediation "
-            "is desired.",
+            "updates it. Closed issues are treated as historical records; if "
+            "the same package appears in a future scan and no open issue "
+            "exists, the scanner creates a new issue.",
         ]
     )
     return "\n".join(lines) + "\n"
@@ -381,15 +380,6 @@ def process_findings(
         ]
         if open_matches:
             update_issue(client, open_matches[0], finding)
-            continue
-        if matches:
-            issue_numbers = ", ".join(
-                f"#{text(issue.get('number'))}" for issue in matches
-            )
-            print(
-                "Skipped "
-                f"{finding.fingerprint}; matching closed issue exists: {issue_numbers}"
-            )
             continue
         create_issue(client, finding)
 
