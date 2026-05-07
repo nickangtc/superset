@@ -216,6 +216,7 @@ Remediate this npm audit security issue and open a pull request:
 
 Issue: {issue.html_url}
 Title: {issue.title}
+Issue number: #{issue.number}
 
 Issue body:
 {issue.body}
@@ -234,6 +235,9 @@ Additional instructions:
   automated fixes.
 - Run relevant install, lint/typecheck, and targeted tests where practical.
 - Open a PR back to this repository and explain the validation performed.
+- IMPORTANT: The PR description MUST include `Closes #{issue.number}` so that
+  GitHub automatically links the PR to the issue and closes it on merge.
+  Do NOT merely mention the issue number — use the `Closes #N` keyword.
 """
 
 

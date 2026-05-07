@@ -34,4 +34,5 @@ Use this playbook when a Devin session is launched from an `npm-audit` issue wit
    - targeted tests for impacted packages when practical
    - leave broad/full test-suite execution to CI when local runtime cost is excessive
 9. Open a single pull request covering all advisories for the package. Include the remediation summary, advisory details, and validation performed.
-10. If the dependency fix is risky, blocked, or requires a semver-major upgrade, explain the tradeoff in the PR and keep the diff minimal.
+10. **Link the PR to its GitHub issue.** The PR description **must** contain `Closes #<issue_number>` (using the issue number from the triggering npm-audit issue) so that GitHub automatically links the PR to the issue and closes it when the PR is merged. This ensures the issue timeline shows "linked a pull request that will close this issue" instead of just "mentioned this".
+11. If the dependency fix is risky, blocked, or requires a semver-major upgrade, explain the tradeoff in the PR and keep the diff minimal.
