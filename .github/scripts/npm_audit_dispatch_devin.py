@@ -287,11 +287,52 @@ def validate_trigger(issue: IssueContext) -> bool:
     return True
 
 
+def dry_run_issue() -> IssueContext:
+    """Build a synthetic issue for local dry-run simulation."""
+    return IssueContext(
+        number="0",
+        title="[npm audit] critical: example-package - 2 high/critical advisories",
+        body=(
+            "<!-- devin-fingerprint: npm-audit|package=example-package -->\n"
+            "# npm audit finding\n\n"
+            "| Field | Value |\n"
+            "| --- | --- |\n"
+            "| Package | `example-package` |\n"
+            "| Highest severity | `critical` |\n"
+            "| Advisory count | 2 |\n"
+            "| Vulnerable ranges | `<2.0.0` |\n"
+            "| Recommended fix | Upgrade `example-package` to `2.0.0` |\n"
+        ),
+        state="open",
+        html_url="https://github.com/example/repo/issues/0",
+        labels={"npm-audit", "security", "devin-remediate"},
+    )
+
+
 def main() -> None:
+    dry_run = os.environ.get("DRY_RUN", "").lower() == "true"
     repo = os.environ.get("GITHUB_REPOSITORY", "")
     github_token = os.environ.get("GITHUB_TOKEN", "")
     devin_api_key = os.environ.get("DEVIN_API_KEY", "")
     devin_org_id = os.environ.get("DEVIN_ORG_ID", "")
+
+    if dry_run:
+        repo = repo or "owner/repo"
+        issue = dry_run_issue()
+        print(f"DRY RUN: simulating dispatch for issue #{issue.number}")
+        print(f"  Title: {issue.title}")
+        print(f"  Labels: {sorted(issue.labels)}")
+        print(f"  State: {issue.state}")
+        print()
+        prompt = build_prompt(repo, issue, load_playbook())
+        print("=" * 72)
+        print("PROMPT THAT WOULD BE SENT TO DEVIN:")
+        print("=" * 72)
+        print(prompt)
+        print("=" * 72)
+        print("DRY RUN complete. No API calls were made.")
+        return
+
     if not repo or not github_token:
         raise SystemExit("GITHUB_REPOSITORY and GITHUB_TOKEN are required")
     if not devin_api_key or not devin_org_id:
