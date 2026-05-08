@@ -99,16 +99,17 @@ That marker prevents duplicate Devin sessions for the same issue.
 
 **How it works:**
 
-1. Fetches all issues labeled `npm-audit` + `devin-remediate` (one paginated API call).
+1. Fetches all issues labeled `npm-audit` + `security` + `devin-remediate` (one paginated API call).
 2. For each issue, fetches timeline events to discover linked pull requests (one call per issue).
 3. Classifies each issue into one of four buckets:
    - **PR merged** — at least one linked PR was merged.
    - **PR closed (not merged)** — all linked PRs were closed without merging.
    - **PR open (in progress)** — at least one linked PR is still open.
    - **No PR created** — no cross-referenced PR found on the issue timeline.
-4. Renders a single HTML file with Chart.js pie charts, summary cards, and a detail table.
-5. The HTML contains six tabs for predefined time frames (30 / 60 / 90 / 180 / 365 days, and year to date), all computed from the same API data — no extra requests per tab.
-6. The HTML file is uploaded as a GitHub Actions artifact (retained for 90 days).
+4. Calculates estimated savings for closed linked PRs. Each closed PR counts as 60 minutes saved, based on a 65-minute manual remediation estimate minus 5 minutes of human involvement with Devin. Labour cost savings use a Singapore software engineer median salary of S$6,750/month, converted to S$38.94/hour using 2,080 work hours/year.
+5. Renders a single HTML file with Chart.js pie charts, savings cards, summary cards, and a detail table.
+6. The HTML contains six tabs for predefined time frames (30 / 60 / 90 / 180 / 365 days, and year to date), all computed from the same API data — no extra requests per tab.
+7. The HTML file is uploaded as a GitHub Actions artifact (retained for 90 days).
 
 **Running it:** go to the Actions tab → **Devin Remediation Metrics** → **Run workflow**. Once the job completes, download the `devin-metrics-report` artifact and open the HTML file in any browser.
 

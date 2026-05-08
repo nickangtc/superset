@@ -33,7 +33,18 @@ from datetime import datetime, timedelta, timezone
 JsonObject = dict[str, object]
 
 SOURCE_LABEL = "npm-audit"
+SECURITY_LABEL = "security"
 TRIGGER_LABEL = "devin-remediate"
+HUMAN_REMEDIATION_MINUTES = 65
+DEVIN_HUMAN_INVOLVEMENT_MINUTES = 5
+MINUTES_SAVED_PER_CLOSED_PR = (
+    HUMAN_REMEDIATION_MINUTES - DEVIN_HUMAN_INVOLVEMENT_MINUTES
+)
+MEDIAN_ENGINEER_MONTHLY_SALARY_SGD = 6750
+WORK_HOURS_PER_YEAR = 2080
+ENGINEER_HOURLY_WAGE_SGD = (
+    MEDIAN_ENGINEER_MONTHLY_SALARY_SGD * 12 / WORK_HOURS_PER_YEAR
+)
 
 TIMEFRAMES: list[tuple[str, int | str]] = [
     ("30 days", 30),
@@ -146,7 +157,7 @@ def label_names(issue: JsonObject) -> set[str]:
 
 
 def fetch_devin_issues(client: GitHubClient) -> list[IssueSummary]:
-    labels = urllib.parse.quote(f"{SOURCE_LABEL},{TRIGGER_LABEL}")
+    labels = urllib.parse.quote(f"{SOURCE_LABEL},{SECURITY_LABEL},{TRIGGER_LABEL}")
     raw_issues = client.paginated(f"/issues?state=all&labels={labels}")
     issues: list[IssueSummary] = []
     for raw in raw_issues:
@@ -258,6 +269,25 @@ def count_statuses(outcomes: list[IssueOutcome]) -> dict[str, int]:
     return counts
 
 
+def count_closed_prs(outcomes: list[IssueOutcome]) -> int:
+    closed_pr_numbers: set[str] = set()
+    for outcome in outcomes:
+        for pr in outcome.prs:
+            if pr.state == "closed":
+                closed_pr_numbers.add(pr.number)
+    return len(closed_pr_numbers)
+
+
+def format_hours(hours: float) -> str:
+    if hours.is_integer():
+        return f"{int(hours):,}"
+    return f"{hours:,.1f}"
+
+
+def format_sgd(amount: float) -> str:
+    return f"S${amount:,.2f}"
+
+
 def load_template() -> str:
     tpl = pathlib.Path(__file__).parent / "devin_metrics_template.html"
     return tpl.read_text(encoding="utf-8")
@@ -277,6 +307,9 @@ def _build_tab_data(
     for label, value in TIMEFRAMES:
         filtered = filter_outcomes(outcomes, value, now)
         counts = count_statuses(filtered)
+        closed_pr_count = count_closed_prs(filtered)
+        hours_saved = closed_pr_count * MINUTES_SAVED_PER_CLOSED_PR / 60
+        labour_cost_saved = hours_saved * ENGINEER_HOURLY_WAGE_SGD
         issues_list = [
             {
                 "number": o.issue.number,
@@ -299,6 +332,9 @@ def _build_tab_data(
             {
                 "label": label,
                 "counts": counts,
+                "closed_pr_count": closed_pr_count,
+                "hours_saved": format_hours(hours_saved),
+                "labour_cost_saved": format_sgd(labour_cost_saved),
                 "total": len(filtered),
                 "issues": issues_list,
             }
@@ -342,7 +378,11 @@ def main() -> None:
     print(f"Fetching Devin remediation issues for {repo}...")
     client = GitHubClient(repo, token)
     issues = fetch_devin_issues(client)
-    print(f"Found {len(issues)} issues with labels {SOURCE_LABEL}+{TRIGGER_LABEL}")
+    print(
+        "Found "
+        f"{len(issues)} issues with labels "
+        f"{SOURCE_LABEL}+{SECURITY_LABEL}+{TRIGGER_LABEL}"
+    )
 
     if not issues:
         print("No issues found. Generating empty report.")
