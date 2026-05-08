@@ -19,8 +19,7 @@ name: NPM Audit Scan
 
 on:
   schedule:
-    - cron: "0 3 * * *"
-    - cron: "0 4 * * *"
+    - cron: "0 5 * * *"
   workflow_dispatch:
 
 permissions:
@@ -35,33 +34,15 @@ jobs:
   scan:
     runs-on: ubuntu-24.04
     steps:
-      - name: Gate scheduled runs to 5am Berlin time
-        id: berlin-time
-        shell: bash
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if [[ "$(TZ=Europe/Berlin date +%H)" == "05" ]]; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "should_run=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Checkout repository
-        if: steps.berlin-time.outputs.should_run == 'true'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Setup Node
-        if: steps.berlin-time.outputs.should_run == 'true'
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version-file: "./superset-frontend/.nvmrc"
 
       - name: Run npm audit
-        if: steps.berlin-time.outputs.should_run == 'true'
         shell: bash
         run: |
           audit_status=0
@@ -73,7 +54,6 @@ jobs:
           fi
 
       - name: Create or update npm audit issues
-        if: steps.berlin-time.outputs.should_run == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.ISSUE_BOT_TOKEN || secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
