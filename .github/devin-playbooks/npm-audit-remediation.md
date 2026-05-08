@@ -19,6 +19,36 @@ limitations under the License.
 
 Use this playbook when a Devin session is launched from an `npm-audit` issue with the `devin-remediate` routing label.
 
+## Contextual triage
+
+Treat `npm audit` as input, not truth. Before making changes, assess the vulnerable package in this repository's context.
+
+For the package named in the issue:
+
+1. Determine whether it is direct or transitive.
+2. Determine whether it is under `dependencies`, `devDependencies`, `peerDependencies`, or `optionalDependencies`.
+3. Identify the dependency path and parent package using commands such as:
+   - `npm explain <package>`
+   - `npm ls <package>`
+4. Determine likely execution context:
+   - production runtime
+   - browser bundle
+   - build pipeline
+   - CI/CD
+   - test/lint/storybook/dev-server tooling
+   - unused or unclear
+5. Do not dismiss devDependencies automatically. Build and CI dependencies may matter if they process contributor input, build production artifacts, or run with secrets.
+6. For frontend code, do not assume every dependency ships to users. Check whether the package is imported by production source or appears likely to be bundled.
+7. Assess realistic risk:
+   - Is vulnerable functionality likely called?
+   - Is attacker-controlled input plausibly passed to it?
+   - Is this production risk, build-pipeline risk, local-dev risk, or likely noise?
+8. State confidence briefly:
+   - high confidence real risk
+   - medium confidence potential risk
+   - low confidence / likely noise
+   - needs human review
+
 ## Guardrails
 
 1. Each npm-audit GitHub issue covers **one package** and may list **multiple advisories**. The goal is to remediate the full set of advisories for that package in a single PR.
@@ -36,3 +66,29 @@ Use this playbook when a Devin session is launched from an `npm-audit` issue wit
 9. Open a single pull request covering all advisories for the package. Include the remediation summary, advisory details, and validation performed.
 10. **Link the PR to its GitHub issue.** The PR description **must** contain `Closes #<issue_number>` (using the issue number from the triggering npm-audit issue) so that GitHub automatically links the PR to the issue and closes it when the PR is merged. This ensures the issue timeline shows "linked a pull request that will close this issue" instead of just "mentioned this".
 11. If the dependency fix is risky, blocked, or requires a semver-major upgrade, explain the tradeoff in the PR and keep the diff minimal.
+
+## Fix strategy
+
+Recommend and implement the least disruptive safe fix.
+
+Prefer, in order:
+1. non-breaking upgrade of the direct dependency
+2. upgrade of the parent dependency that introduces the vulnerable package
+3. semver-safe `npm audit fix`
+4. targeted override/resolution if compatible and justified
+5. removal of unused dependency
+
+Avoid `npm audit fix --force` unless the PR explains why a breaking upgrade is necessary and acceptable.
+Do not suppress an advisory unless the exploit path is not applicable, no fix exists, or compensating controls are documented.
+
+## PR explanation
+
+In the PR body, include a concise security note:
+
+- vulnerable package
+- dependency path / parent package
+- execution context
+- realistic risk assessment
+- confidence
+- remediation chosen
+- validation performed
