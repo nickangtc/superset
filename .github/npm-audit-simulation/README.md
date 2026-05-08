@@ -60,8 +60,8 @@ GitHub Actions, API keys, or a live Devin integration.
 2. Python script parses findings, groups by package, and creates/updates GitHub issues.
 3. Issues receive labels: `npm-audit`, `security`, `devin-remediate`.
 4. The `devin-remediate` label triggers a dispatch workflow.
-5. Dispatch workflow validates the issue and starts a Devin API session with the playbook.
-6. Devin follows the playbook, remediates the vulnerability, and opens a PR.
+5. Dispatch workflow validates the issue and starts a Devin API session with the repo-owned skill.
+6. Devin follows the skill, remediates the vulnerability, and opens a PR.
 
 ---
 
@@ -130,7 +130,7 @@ docker run --rm npm-audit-sim -c \
 # Run Devin dispatch in dry-run mode (uses real audit data from superset-frontend)
 docker run --rm \
   -e DRY_RUN=true \
-  -e PLAYBOOK_PATH=/workspace/playbooks/npm-audit-remediation.md \
+  -e SKILL_PATH=/workspace/skills/npm-audit-remediation/SKILL.md \
   -e NPM_AUDIT_JSON=/tmp/npm-audit.json \
   npm-audit-sim -c \
   "cd /workspace/superset-frontend && \
@@ -164,7 +164,7 @@ docker compose run --rm npm-audit-sim
 |---------|--------|
 | `audit` | Raw JSON output from `npm audit` showing vulnerabilities in `superset-frontend` |
 | `issues` | List of packages with high/critical advisories that would become GitHub issues |
-| `dispatch` | The full Devin prompt (with playbook) built from real audit findings that would be sent to the Devin API |
+| `dispatch` | The full Devin prompt (with the skill) built from real audit findings that would be sent to the Devin API |
 | `validate` | Confirmation that all Python scripts have valid syntax |
 
 ### Simulated vs real
@@ -219,7 +219,7 @@ To run the full automation in your GitHub fork:
 | `.github/workflows/npm-audit-devin-dispatch.yml` | Label-triggered Devin dispatch workflow |
 | `.github/scripts/npm_audit_create_issues.py` | Parse audit JSON, create/update GitHub issues |
 | `.github/scripts/npm_audit_dispatch_devin.py` | Validate issue, build prompt, call Devin API |
-| `.github/devin-playbooks/npm-audit-remediation.md` | Source-controlled playbook for Devin |
+| `.agents/skills/npm-audit-remediation/SKILL.md` | Source-controlled skill for Devin |
 | `.github/devin-remediation.md` | Architecture documentation |
 | `.github/npm-audit-simulation/Dockerfile` | Docker image for local simulation |
 | `.github/npm-audit-simulation/docker-compose.yml` | Compose config for simulation |

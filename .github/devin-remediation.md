@@ -23,7 +23,7 @@ This repository contains a GitHub Actions automation loop for high and critical 
 2. `.github/scripts/npm_audit_create_issues.py` parses the audit report and creates or updates one GitHub issue per vulnerable **package**, grouping all high/critical advisories for that package into a single issue.
 3. Issues receive the labels `npm-audit`, `security`, and `devin-remediate`.
 4. `.github/workflows/npm-audit-devin-dispatch.yml` listens for `issues: labeled` events where the added label is `devin-remediate`, verifies the issue is a scanner-created open npm audit issue, and starts a Devin API v3 session.
-5. Devin follows `.github/devin-playbooks/npm-audit-remediation.md`, remediates the dependency vulnerability, and opens a PR.
+5. Devin follows `.agents/skills/npm-audit-remediation/SKILL.md`, remediates the dependency vulnerability, and opens a PR.
 
 ## Required repository configuration
 
