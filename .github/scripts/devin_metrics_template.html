@@ -1,0 +1,254 @@
+<!--
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to You under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Devin Remediation Metrics — {{REPO}}</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+      Helvetica, Arial, sans-serif;
+    background: #f6f8fa; color: #1f2328; padding: 24px;
+  }
+  h1 { font-size: 24px; margin-bottom: 4px; }
+  .subtitle { color: #656d76; font-size: 14px; margin-bottom: 24px; }
+  .tabs {
+    display: flex; gap: 0;
+    border-bottom: 1px solid #d1d9e0;
+    margin-bottom: 24px; flex-wrap: wrap;
+  }
+  .tab {
+    padding: 8px 16px; cursor: pointer;
+    border: 1px solid transparent; border-bottom: none;
+    border-radius: 6px 6px 0 0; font-size: 14px;
+    color: #656d76; background: transparent;
+  }
+  .tab:hover { color: #1f2328; }
+  .tab.active {
+    color: #1f2328; background: #fff;
+    border-color: #d1d9e0; margin-bottom: -1px;
+    font-weight: 600;
+  }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .metrics-grid {
+    display: grid; grid-template-columns: 320px 1fr;
+    gap: 24px; margin-bottom: 24px;
+  }
+  @media (max-width: 768px) {
+    .metrics-grid { grid-template-columns: 1fr; }
+  }
+  .chart-container {
+    background: #fff; border: 1px solid #d1d9e0;
+    border-radius: 8px; padding: 24px;
+    display: flex; align-items: center;
+    justify-content: center; min-height: 300px;
+  }
+  .summary-cards {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 12px; align-content: start;
+  }
+  .card {
+    background: #fff; border: 1px solid #d1d9e0;
+    border-radius: 8px; padding: 16px; text-align: center;
+  }
+  .card .count { font-size: 32px; font-weight: 700; }
+  .card .label { font-size: 12px; color: #656d76; margin-top: 4px; }
+  .total-card { grid-column: span 2; }
+  .total-card .count { font-size: 40px; }
+  table {
+    width: 100%; border-collapse: collapse;
+    background: #fff; border: 1px solid #d1d9e0;
+    border-radius: 8px; overflow: hidden;
+  }
+  th {
+    text-align: left; padding: 10px 12px;
+    background: #f6f8fa;
+    border-bottom: 1px solid #d1d9e0;
+    font-size: 13px; color: #656d76;
+  }
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #d1d9e0;
+    font-size: 14px;
+  }
+  tr:last-child td { border-bottom: none; }
+  a { color: #0969da; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .badge {
+    display: inline-block; padding: 2px 8px;
+    border-radius: 12px; font-size: 12px;
+    font-weight: 600; color: #fff;
+  }
+  .badge-merged { background: #2da44e; }
+  .badge-closed { background: #cf222e; }
+  .badge-open { background: #bf8700; }
+  .badge-no_pr { background: #656d76; }
+  .empty { text-align: center; padding: 48px; color: #656d76; }
+</style>
+</head>
+<body>
+<h1>Devin Remediation Metrics</h1>
+<p class="subtitle">{{REPO}} &mdash; Generated {{GENERATED_AT}}</p>
+
+<div class="tabs" id="tabs"></div>
+<div id="panels"></div>
+
+<script>
+var TAB_DATA = {{TAB_DATA}};
+var STATUS_LABELS = {{STATUS_LABELS}};
+var STATUS_COLORS = {{STATUS_COLORS}};
+var STATUS_ORDER = ["merged", "closed", "open", "no_pr"];
+
+var tabsEl = document.getElementById("tabs");
+var panelsEl = document.getElementById("panels");
+var charts = {};
+
+TAB_DATA.forEach(function(tab, i) {
+  var tabBtn = document.createElement("div");
+  tabBtn.className = "tab" + (i === 0 ? " active" : "");
+  tabBtn.textContent = tab.label + " (" + tab.total + ")";
+  tabBtn.dataset.index = i;
+  tabBtn.addEventListener("click", function() { switchTab(i); });
+  tabsEl.appendChild(tabBtn);
+
+  var panel = document.createElement("div");
+  panel.className = "panel" + (i === 0 ? " active" : "");
+  panel.id = "panel-" + i;
+
+  if (tab.total === 0) {
+    panel.innerHTML =
+      '<div class="empty">' +
+      'No Devin remediation issues found in this time period.' +
+      '</div>';
+  } else {
+    var cardsHtml =
+      '<div class="metrics-grid"><div class="summary-cards">' +
+      '<div class="card total-card">' +
+      '<div class="count">' + tab.total + '</div>' +
+      '<div class="label">Total issues</div></div>';
+    STATUS_ORDER.forEach(function(s) {
+      var color = STATUS_COLORS[s];
+      cardsHtml +=
+        '<div class="card">' +
+        '<div class="count" style="color:' + color + '">' +
+        tab.counts[s] + '</div>' +
+        '<div class="label">' + STATUS_LABELS[s] + '</div></div>';
+    });
+    cardsHtml +=
+      '</div><div class="chart-container">' +
+      '<canvas id="chart-' + i + '" ' +
+      'width="280" height="280"></canvas></div></div>';
+
+    var tableHtml =
+      '<table><thead><tr>' +
+      '<th>Issue</th><th>Title</th>' +
+      '<th>Status</th><th>Pull Requests</th>' +
+      '</tr></thead><tbody>';
+    tab.issues.forEach(function(issue) {
+      var prLinks = issue.prs.length === 0
+        ? "&mdash;"
+        : issue.prs.map(function(pr) {
+            return '<a href="' + pr.url + '">#' +
+              pr.number + '</a> (' + pr.state + ')';
+          }).join(", ");
+      tableHtml +=
+        '<tr>' +
+        '<td><a href="' + issue.url + '">#' +
+        issue.number + '</a></td>' +
+        '<td>' + issue.title + '</td>' +
+        '<td><span class="badge badge-' + issue.status +
+        '">' + issue.status_label + '</span></td>' +
+        '<td>' + prLinks + '</td></tr>';
+    });
+    tableHtml += '</tbody></table>';
+    panel.innerHTML = cardsHtml + tableHtml;
+  }
+
+  panelsEl.appendChild(panel);
+});
+
+function switchTab(index) {
+  document.querySelectorAll(".tab").forEach(function(t) {
+    t.classList.remove("active");
+  });
+  document.querySelectorAll(".panel").forEach(function(p) {
+    p.classList.remove("active");
+  });
+  tabsEl.children[index].classList.add("active");
+  document.getElementById("panel-" + index).classList.add("active");
+  renderChart(index);
+}
+
+function renderChart(index) {
+  var tab = TAB_DATA[index];
+  if (tab.total === 0) return;
+  var canvas = document.getElementById("chart-" + index);
+  if (!canvas) return;
+  if (charts[index]) { charts[index].destroy(); }
+  var data = STATUS_ORDER.map(function(s) { return tab.counts[s]; });
+  var labels = STATUS_ORDER.map(function(s) { return STATUS_LABELS[s]; });
+  var colors = STATUS_ORDER.map(function(s) { return STATUS_COLORS[s]; });
+  charts[index] = new Chart(canvas, {
+    type: "pie",
+    data: {
+      labels: labels,
+      datasets: [{
+        data: data,
+        backgroundColor: colors,
+        borderWidth: 2,
+        borderColor: "#fff"
+      }]
+    },
+    options: {
+      responsive: false,
+      plugins: {
+        legend: {
+          position: "bottom",
+          labels: {
+            padding: 16,
+            usePointStyle: true,
+            font: { size: 12 }
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              var total = ctx.dataset.data.reduce(
+                function(a, b) { return a + b; }, 0
+              );
+              var pct = total > 0
+                ? Math.round(ctx.raw / total * 100)
+                : 0;
+              return ctx.label + ": " + ctx.raw +
+                " (" + pct + "%)";
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+renderChart(0);
+</script>
+</body>
+</html>

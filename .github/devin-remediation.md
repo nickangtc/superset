@@ -93,6 +93,27 @@ When a session is created, the workflow comments back on the issue with a hidden
 
 That marker prevents duplicate Devin sessions for the same issue.
 
+## Metrics / observability
+
+`.github/workflows/devin-metrics.yml` is a manual `workflow_dispatch` workflow that generates a self-contained HTML report showing the effectiveness of Devin remediations over time.
+
+**How it works:**
+
+1. Fetches all issues labeled `npm-audit` + `devin-remediate` (one paginated API call).
+2. For each issue, fetches timeline events to discover linked pull requests (one call per issue).
+3. Classifies each issue into one of four buckets:
+   - **PR merged** — at least one linked PR was merged.
+   - **PR closed (not merged)** — all linked PRs were closed without merging.
+   - **PR open (in progress)** — at least one linked PR is still open.
+   - **No PR created** — no cross-referenced PR found on the issue timeline.
+4. Renders a single HTML file with Chart.js pie charts, summary cards, and a detail table.
+5. The HTML contains six tabs for predefined time frames (30 / 60 / 90 / 180 / 365 days, and year to date), all computed from the same API data — no extra requests per tab.
+6. The HTML file is uploaded as a GitHub Actions artifact (retained for 90 days).
+
+**Running it:** go to the Actions tab → **Devin Remediation Metrics** → **Run workflow**. Once the job completes, download the `devin-metrics-report` artifact and open the HTML file in any browser.
+
+No additional secrets are required — the workflow uses the default `GITHUB_TOKEN` with `issues: read` permission.
+
 ## Manual demo steps
 
 1. Run **NPM Audit Scan** from the Actions tab with `workflow_dispatch`.
