@@ -19,7 +19,7 @@ name: NPM Audit Scan
 
 on:
   schedule:
-    - cron: "0 5 * * *"
+    - cron: "0 5 * * *" # daily at 5 AM UTC; exact hour is arbitrary
   workflow_dispatch:
 
 permissions:
