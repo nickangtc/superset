@@ -287,11 +287,195 @@ def validate_trigger(issue: IssueContext) -> bool:
     return True
 
 
+SEVERITY_RANK = {"critical": 0, "high": 1}
+DRY_RUN_SEVERITIES = {"high", "critical"}
+
+
+def _render_fix(fix_available: object) -> str:
+    if isinstance(fix_available, bool):
+        return "Yes" if fix_available else "No"
+    if isinstance(fix_available, dict):
+        name = text(fix_available.get("name"))
+        version = text(fix_available.get("version"))
+        major = " (semver-major)" if fix_available.get("isSemVerMajor") else ""
+        if name and version:
+            return f"Upgrade `{name}` to `{version}`{major}"
+        if version:
+            return f"Upgrade to `{version}`{major}"
+    return "Not reported"
+
+
+def _extract_advisories(
+    vulnerabilities: JsonObject,
+) -> tuple[dict[str, list[dict[str, str]]], dict[str, str]]:
+    packages: dict[str, list[dict[str, str]]] = {}
+    package_fix: dict[str, str] = {}
+
+    for package_name, raw_vuln in vulnerabilities.items():
+        vuln = as_mapping(raw_vuln)
+        pkg_severity = text(vuln.get("severity")).lower()
+        pkg_range = text(vuln.get("range"))
+        package_fix[package_name] = _render_fix(vuln.get("fixAvailable"))
+
+        for raw_advisory in as_list(vuln.get("via")):
+            advisory = as_mapping(raw_advisory)
+            if not advisory:
+                continue
+            severity = text(advisory.get("severity")).lower() or pkg_severity
+            if severity not in DRY_RUN_SEVERITIES:
+                continue
+            adv_id = (
+                text(advisory.get("source"))
+                or text(advisory.get("url"))
+                or text(advisory.get("title"))
+            )
+            if not adv_id:
+                continue
+            if package_name not in packages:
+                packages[package_name] = []
+            existing_ids = {a["id"] for a in packages[package_name]}
+            if adv_id not in existing_ids:
+                packages[package_name].append(
+                    {
+                        "id": adv_id,
+                        "title": text(advisory.get("title")) or package_name,
+                        "severity": severity,
+                        "range": text(advisory.get("range"))
+                        or pkg_range
+                        or "Not reported",
+                        "url": text(advisory.get("url")),
+                    }
+                )
+
+    return packages, package_fix
+
+
+def _build_issue_body(pkg_name: str, advisories: list[dict[str, str]], fix: str) -> str:
+    highest = "high"
+    for adv in advisories:
+        if SEVERITY_RANK.get(adv["severity"], 99) < SEVERITY_RANK.get(highest, 99):
+            highest = adv["severity"]
+
+    seen_ranges: dict[str, None] = {}
+    for adv in advisories:
+        seen_ranges.setdefault(adv["range"], None)
+    ranges_display = ", ".join(f"`{r}`" for r in seen_ranges)
+
+    lines = [
+        f"<!-- devin-fingerprint: npm-audit|package={pkg_name} -->",
+        "# npm audit finding",
+        "",
+        "| Field | Value |",
+        "| --- | --- |",
+        f"| Package | `{pkg_name}` |",
+        f"| Highest severity | `{highest}` |",
+        f"| Advisory count | {len(advisories)} |",
+        f"| Vulnerable ranges | {ranges_display} |",
+        f"| Recommended fix | {fix} |",
+        "",
+        "## Advisories",
+        "",
+        "| Severity | Advisory | Vulnerable range | Title |",
+        "| --- | --- | --- | --- |",
+    ]
+    for adv in advisories:
+        link = adv["url"] if adv["url"] else adv["id"]
+        lines.append(
+            f"| `{adv['severity']}` | {link} | `{adv['range']}` | {adv['title']} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Remediation",
+            "",
+            "This issue was generated from `npm audit --json` in the "
+            "`superset-frontend` package-lock context.",
+        ]
+    )
+    return "\n".join(lines) + "\n"
+
+
+def parse_audit_for_dry_run(audit_path: str) -> list[IssueContext]:
+    """Parse a real npm audit JSON file into simulated IssueContext objects."""
+    with open(audit_path, encoding="utf-8") as f:
+        report = as_mapping(json.load(f))
+
+    vulnerabilities = as_mapping(report.get("vulnerabilities"))
+    packages, package_fix = _extract_advisories(vulnerabilities)
+
+    issues: list[IssueContext] = []
+    for pkg_name in sorted(packages):
+        advisories = sorted(
+            packages[pkg_name],
+            key=lambda a: (SEVERITY_RANK.get(a["severity"], 99), a["id"]),
+        )
+        highest = "high"
+        for adv in advisories:
+            if SEVERITY_RANK.get(adv["severity"], 99) < SEVERITY_RANK.get(highest, 99):
+                highest = adv["severity"]
+
+        count = len(advisories)
+        plural = "advisories" if count != 1 else "advisory"
+        title = f"[npm audit] {highest}: {pkg_name} - {count} high/critical {plural}"
+        body = _build_issue_body(
+            pkg_name, advisories, package_fix.get(pkg_name, "Not reported")
+        )
+
+        issues.append(
+            IssueContext(
+                number=str(len(issues) + 1),
+                title=title,
+                body=body,
+                state="open",
+                html_url=f"https://github.com/owner/repo/issues/{len(issues) + 1}",
+                labels={"npm-audit", "security", "devin-remediate"},
+            )
+        )
+
+    return issues
+
+
 def main() -> None:
+    dry_run = os.environ.get("DRY_RUN", "").lower() == "true"
     repo = os.environ.get("GITHUB_REPOSITORY", "")
     github_token = os.environ.get("GITHUB_TOKEN", "")
     devin_api_key = os.environ.get("DEVIN_API_KEY", "")
     devin_org_id = os.environ.get("DEVIN_ORG_ID", "")
+
+    if dry_run:
+        repo = repo or "owner/repo"
+        audit_path = os.environ.get("NPM_AUDIT_JSON", "")
+        if audit_path:
+            issues = parse_audit_for_dry_run(audit_path)
+        else:
+            issues = []
+
+        if not issues:
+            print("DRY RUN: no npm audit JSON provided or no high/critical findings.")
+            print("  Hint: set NPM_AUDIT_JSON=/path/to/audit.json to use real data.")
+            return
+
+        playbook = load_playbook()
+        for issue in issues:
+            print(f"DRY RUN: simulating dispatch for issue #{issue.number}")
+            print(f"  Title: {issue.title}")
+            print(f"  Labels: {sorted(issue.labels)}")
+            print(f"  State: {issue.state}")
+            print()
+            prompt = build_prompt(repo, issue, playbook)
+            print("=" * 72)
+            print(f"PROMPT THAT WOULD BE SENT TO DEVIN (issue #{issue.number}):")
+            print("=" * 72)
+            print(prompt)
+            print("=" * 72)
+            print()
+
+        print(
+            f"DRY RUN complete. {len(issues)} issue(s) would dispatch Devin sessions."
+            " No API calls were made."
+        )
+        return
+
     if not repo or not github_token:
         raise SystemExit("GITHUB_REPOSITORY and GITHUB_TOKEN are required")
     if not devin_api_key or not devin_org_id:
