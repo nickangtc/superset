@@ -236,9 +236,7 @@ def parse_iso(date_str: str) -> datetime:
     return datetime.fromisoformat(cleaned)
 
 
-def cutoff_for_timeframe(
-    frame_value: int | str, now: datetime
-) -> datetime:
+def cutoff_for_timeframe(frame_value: int | str, now: datetime) -> datetime:
     if frame_value == "ytd":
         return datetime(now.year, 1, 1, tzinfo=timezone.utc)
     if isinstance(frame_value, int):
@@ -261,10 +259,7 @@ def count_statuses(outcomes: list[IssueOutcome]) -> dict[str, int]:
 
 
 def load_template() -> str:
-    tpl = (
-        pathlib.Path(__file__).parent
-        / "devin_metrics_template.html"
-    )
+    tpl = pathlib.Path(__file__).parent / "devin_metrics_template.html"
     return tpl.read_text(encoding="utf-8")
 
 
@@ -280,21 +275,15 @@ def _build_tab_data(
 ) -> list[dict[str, object]]:
     tab_data: list[dict[str, object]] = []
     for label, value in TIMEFRAMES:
-        filtered = filter_outcomes(
-            outcomes, value, now
-        )
+        filtered = filter_outcomes(outcomes, value, now)
         counts = count_statuses(filtered)
         issues_list = [
             {
                 "number": o.issue.number,
-                "title": html.escape(
-                    o.issue.title
-                ),
+                "title": html.escape(o.issue.title),
                 "url": o.issue.html_url,
                 "status": o.status,
-                "status_label": (
-                    STATUS_LABELS[o.status]
-                ),
+                "status_label": (STATUS_LABELS[o.status]),
                 "prs": [
                     {
                         "number": pr.number,
@@ -317,7 +306,6 @@ def _build_tab_data(
     return tab_data
 
 
-
 def build_html(
     outcomes: list[IssueOutcome],
     repo: str,
@@ -326,9 +314,7 @@ def build_html(
     now = datetime.now(tz=timezone.utc)
     tab_data = _build_tab_data(outcomes, now)
     template = load_template()
-    result = template.replace(
-        "{{TAB_DATA}}", json.dumps(tab_data)
-    )
+    result = template.replace("{{TAB_DATA}}", json.dumps(tab_data))
     result = result.replace(
         "{{STATUS_LABELS}}",
         json.dumps(STATUS_LABELS),
@@ -337,9 +323,7 @@ def build_html(
         "{{STATUS_COLORS}}",
         json.dumps(STATUS_COLORS),
     )
-    result = result.replace(
-        "{{REPO}}", html.escape(repo)
-    )
+    result = result.replace("{{REPO}}", html.escape(repo))
     result = result.replace(
         "{{GENERATED_AT}}",
         html.escape(generated_at),
@@ -348,54 +332,29 @@ def build_html(
 
 
 def main() -> None:
-    repo = os.environ.get(
-        "GITHUB_REPOSITORY", ""
-    )
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
     token = os.environ.get("GITHUB_TOKEN", "")
-    output = os.environ.get(
-        "OUTPUT_PATH", "devin-metrics.html"
-    )
+    output = os.environ.get("OUTPUT_PATH", "devin-metrics.html")
 
     if not repo or not token:
-        raise SystemExit(
-            "GITHUB_REPOSITORY and "
-            "GITHUB_TOKEN are required"
-        )
+        raise SystemExit("GITHUB_REPOSITORY and GITHUB_TOKEN are required")
 
-    print(
-        "Fetching Devin remediation "
-        f"issues for {repo}..."
-    )
+    print(f"Fetching Devin remediation issues for {repo}...")
     client = GitHubClient(repo, token)
     issues = fetch_devin_issues(client)
-    print(
-        f"Found {len(issues)} issues with "
-        f"labels {SOURCE_LABEL}+{TRIGGER_LABEL}"
-    )
+    print(f"Found {len(issues)} issues with labels {SOURCE_LABEL}+{TRIGGER_LABEL}")
 
     if not issues:
-        print(
-            "No issues found. "
-            "Generating empty report."
-        )
+        print("No issues found. Generating empty report.")
 
-    print(
-        "Fetching linked PRs "
-        "via timeline events..."
-    )
+    print("Fetching linked PRs via timeline events...")
     outcomes = build_outcomes(client, issues)
 
     now = datetime.now(tz=timezone.utc)
-    generated_at = now.strftime(
-        "%Y-%m-%d %H:%M UTC"
-    )
-    report = build_html(
-        outcomes, repo, generated_at
-    )
+    generated_at = now.strftime("%Y-%m-%d %H:%M UTC")
+    report = build_html(outcomes, repo, generated_at)
 
-    with open(
-        output, "w", encoding="utf-8"
-    ) as fh:
+    with open(output, "w", encoding="utf-8") as fh:
         fh.write(report)
     print(f"Report written to {output}")
 
