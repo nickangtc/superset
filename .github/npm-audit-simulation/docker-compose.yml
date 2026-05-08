@@ -22,7 +22,7 @@ services:
       dockerfile: .github/npm-audit-simulation/Dockerfile
     environment:
       - DRY_RUN=true
-      - PLAYBOOK_PATH=/workspace/playbooks/npm-audit-remediation.md
+      - SKILL_PATH=/workspace/skills/npm-audit-remediation/SKILL.md
       - GITHUB_REPOSITORY=${GITHUB_REPOSITORY:-owner/repo}
       # Optional: set these to perform live API calls instead of dry-run
       # - GITHUB_TOKEN=${GITHUB_TOKEN}

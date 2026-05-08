@@ -200,16 +200,16 @@ def has_devin_marker(issue: IssueContext, comments: list[JsonObject]) -> bool:
     )
 
 
-def load_playbook() -> str:
-    playbook_path = os.environ.get(
-        "PLAYBOOK_PATH",
-        ".github/devin-playbooks/npm-audit-remediation.md",
+def load_skill() -> str:
+    skill_path = os.environ.get(
+        "SKILL_PATH",
+        ".agents/skills/npm-audit-remediation/SKILL.md",
     )
-    with open(playbook_path, encoding="utf-8") as playbook_file:
-        return playbook_file.read().strip()
+    with open(skill_path, encoding="utf-8") as skill_file:
+        return skill_file.read().strip()
 
 
-def build_prompt(repo: str, issue: IssueContext, playbook: str) -> str:
+def build_prompt(repo: str, issue: IssueContext, skill: str) -> str:
     return f"""You are Devin working in GitHub repository `{repo}`.
 
 Remediate this npm audit security issue and open a pull request:
@@ -221,9 +221,9 @@ Issue number: #{issue.number}
 Issue body:
 {issue.body}
 
-Follow this source-controlled playbook:
+Follow this source-controlled skill:
 
-{playbook}
+{skill}
 
 Additional instructions:
 - This issue may contain multiple advisories for one package. Remediate the
@@ -455,14 +455,14 @@ def main() -> None:
             print("  Hint: set NPM_AUDIT_JSON=/path/to/audit.json to use real data.")
             return
 
-        playbook = load_playbook()
+        skill = load_skill()
         for issue in issues:
             print(f"DRY RUN: simulating dispatch for issue #{issue.number}")
             print(f"  Title: {issue.title}")
             print(f"  Labels: {sorted(issue.labels)}")
             print(f"  State: {issue.state}")
             print()
-            prompt = build_prompt(repo, issue, playbook)
+            prompt = build_prompt(repo, issue, skill)
             print("=" * 72)
             print(f"PROMPT THAT WOULD BE SENT TO DEVIN (issue #{issue.number}):")
             print("=" * 72)
@@ -491,7 +491,7 @@ def main() -> None:
         print(f"Skipping issue #{issue.number}: Devin session marker already exists")
         return
 
-    prompt = build_prompt(repo, issue, load_playbook())
+    prompt = build_prompt(repo, issue, load_skill())
     response = DevinClient(devin_org_id, devin_api_key).create_session(prompt)
     session_url = session_identifier(response)
     marker = session_marker(response)

@@ -59,7 +59,7 @@ run_dispatch() {
     echo "=== Running Devin dispatch script (DRY_RUN=true, real audit data) ==="
     docker run --rm \
         -e DRY_RUN=true \
-        -e PLAYBOOK_PATH=/workspace/playbooks/npm-audit-remediation.md \
+        -e SKILL_PATH=/workspace/skills/npm-audit-remediation/SKILL.md \
         -e NPM_AUDIT_JSON=/tmp/npm-audit.json \
         "${IMAGE_NAME}" -c \
         "cd /workspace/superset-frontend && npm audit --json --audit-level=high > /tmp/npm-audit.json 2>/dev/null || true; python3 /workspace/scripts/npm_audit_dispatch_devin.py"

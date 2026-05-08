@@ -1,3 +1,11 @@
+---
+name: npm-audit-remediation
+description: >
+  Remediate high and critical npm audit issues in Superset frontend by triaging
+  package risk, making the smallest safe dependency fix, validating the result,
+  and opening a linked PR.
+---
+
 <!--
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -15,9 +23,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 
-# npm audit remediation playbook
+# npm audit remediation
 
-Use this playbook when a Devin session is launched from an `npm-audit` issue with the `devin-remediate` routing label.
+Use this skill when a Devin session is launched from an `npm-audit` issue with the `devin-remediate` routing label.
 
 ## Contextual triage
 
@@ -72,6 +80,7 @@ For the package named in the issue:
 Recommend and implement the least disruptive safe fix.
 
 Prefer, in order:
+
 1. non-breaking upgrade of the direct dependency
 2. upgrade of the parent dependency that introduces the vulnerable package
 3. semver-safe `npm audit fix`

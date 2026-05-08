@@ -51,5 +51,5 @@ jobs:
           ISSUE_NUMBER: ${{ github.event_name == 'workflow_dispatch' && inputs.issue_number || github.event.issue.number }}
           DEVIN_API_KEY: ${{ secrets.DEVIN_API_KEY }}
           DEVIN_ORG_ID: ${{ vars.DEVIN_ORG_ID || secrets.DEVIN_ORG_ID }}
-          PLAYBOOK_PATH: .github/devin-playbooks/npm-audit-remediation.md
+          SKILL_PATH: .agents/skills/npm-audit-remediation/SKILL.md
         run: python3 .github/scripts/npm_audit_dispatch_devin.py

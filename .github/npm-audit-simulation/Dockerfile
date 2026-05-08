@@ -31,16 +31,16 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
 
 WORKDIR /workspace
 
-# Copy automation scripts and playbooks
+# Copy automation scripts and skills
 COPY .github/scripts/npm_audit_create_issues.py /workspace/scripts/npm_audit_create_issues.py
 COPY .github/scripts/npm_audit_dispatch_devin.py /workspace/scripts/npm_audit_dispatch_devin.py
-COPY .github/devin-playbooks/npm-audit-remediation.md /workspace/playbooks/npm-audit-remediation.md
+COPY .agents/skills/npm-audit-remediation/SKILL.md /workspace/skills/npm-audit-remediation/SKILL.md
 
 # Copy superset-frontend package files for npm audit
 COPY superset-frontend/package.json /workspace/superset-frontend/package.json
 COPY superset-frontend/package-lock.json /workspace/superset-frontend/package-lock.json
 
 ENV DRY_RUN=true
-ENV PLAYBOOK_PATH=/workspace/playbooks/npm-audit-remediation.md
+ENV SKILL_PATH=/workspace/skills/npm-audit-remediation/SKILL.md
 
 ENTRYPOINT ["/bin/bash"]
